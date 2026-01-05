@@ -1,9 +1,116 @@
-# Human-machine-collaborative-safety-zone(人機協作安全光柵)
+
+# Human-Machine Collaborative Safety Zone
+
+**Human–Robot Collaborative Safety Light Curtain**  
+Multiple cameras are deployed around the workspace and combined with multi-person 3D human pose tracking to capture the spatial distances and motion relationships between each human joint and the robotic arm. The system continuously monitors whether any human skeleton enters the human–robot collaboration zone.
+
+## Directory Structure and File Descriptions
+
+| Category | File Name | Description |
+| :--- | :--- | :--- |
+| **Main Program** | `fourcamsafe.areav13.2floor.py` | **Main human–robot collaborative safety light curtain program** (uses OSNet; higher performance overhead) |
+| **Backup Main Program** | `safe.areav12.4floor.py` | **Main human–robot collaborative safety light curtain program** (lighter performance overhead; more ghost tracks) |
+| **Four-Camera Capture Tool** | `4capture.py` | Captures calibration photos and hand–eye pose photos using 4 cameras |
+| **Hand–Eye Coordinate Transform** | `tcp_to_base3.py` | Input the robot TCP pose to obtain the transform matrix from chessboard to robot base; paste into the main program |
+| **Human Skeleton Model Weights** | `human.pt` | Used for 2D human skeleton inference; imported via program path |
+| **OSNet Weights** | `osnet_x0_25_msmt17.pt` | Used for multi-person matching; imported via program path |
+| **3D Simulation Floor Texture** | `images.png` | Replaces floor material for better visual appearance |
+| **URDF Folder** | `tm_description` | Robot arm model for the 3D physics simulation environment |
+
+---
+
+## Calibration Workflow and Tools
+
+If the camera positions or viewing angles change, recalibrate by following the steps below in order.
+
+### 1. Collect Calibration Photos
+
+```bash
+python3 4capture.py
+```
+
+This script provides synchronized previews from four cameras and captures stereo calibration chessboard images in a “paired-camera” manner.
+
+- Files are saved as the original PNGs (no overlays). Filenames are `left_{N}.png` / `right_{N}.png`. The save directory can be modified depending on your environment.
+- `left_0.png` / `right_0.png` are the photos taken with the chessboard rigidly mounted to the robot end-effector. Record the TCP pose at that moment: `X Y Z Rx Ry Rz` (**rotation angles must be (90, 0, XX)**).
+- The program scans existing filenames in the folder and automatically continues numbering to avoid overwriting.
+- `CAM_SOURCES`: The four camera sources are enumerated based on USB insertion order (integer index or `/dev/videoX`). Example: `[0, 2, 4, 6]`.
+- `TARGET_SIZE`: Capture resolution; must not be changed (saved images also use this resolution). Example: `(1920, 1080)`.
+
+#### Keyboard Controls
+
+- `1`: Switch to **pair12 (Cam1–Cam2)**
+- `3`: Switch to **pair34 (Cam3–Cam4)**
+- `SPACE`: Capture and save  
+  - Saving occurs only when **both cameras in the current pair detect chessboard corners**.
+- `q` or `ESC`: Exit
+
+---
+
+### 2. Obtain the Chessboard-to-Robot-Base Transform Matrix
+
+```bash
+python3 tcp_to_base3.py
+```
+
+- Enter the recorded TCP pose `X Y Z Rx Ry Rz` (from when `left_0.png / right_0.png` were taken) into `tcp_pose` (**rotation angles must be (90, 0, XX)**).
+- `tcp_pose = [x, y, z, 90, 0, rz]` is the TCP pose in the **Base** frame (read from TMflow Point Manager).
+- `tcp_chess_pose = [-106.5, 71, 95, 0, 180, 180]` is the Chessboard pose in the **TCP** frame. `x y z` must be computed based on the fixture offset (mm).
+- When mounted, the chessboard’s black squares must face upward.
+- After confirming the 3D visualization is correct, copy the `T_base_chess_Rz180` matrix and paste it into the main program to replace `T_offset_12 / T_offset_34`.
+
+---
+
+### 3. Run the Main Program
+
+```bash
+python3 fourcamsafe.areav13.2floor.py
+```
+
+Adjust parameters according to the table below.
+
+## Parameter Tuning for `fourcamsafe.areav13.2floor`
+
+| Name | Description |
+| :--- | :--- |
+| `CALIB_ROOT` | Parent directory containing calibration photo folders for pair12 / pair34 |
+| `MODEL_PATH` | Absolute path to the skeleton model weights |
+| `REID_WEIGHTS` | Absolute path to the OSNet weights |
+| `CAM1_IDX` | Camera index |
+| `USE_PAIR12/34` | Enable/disable the pair |
+| `APPLY_ALIGN_PAIR12/34` | Toggle skeleton alignment offset |
+| `AABB_SCALE` | Dynamic emergency stop zone size (unitless) |
+| `SLOW_BOX_HALF_EXTENT_M` | Half-extent (radius) of the fixed blue slow-down zone (m) |
+| `FLOOR_TEXTURE_PATH` | Floor texture path for the 3D physics simulation environment |
+| `T_offset_12/34` | Transform matrix computed by `tcp_to_base3.py` |
+| `self.tm5_id = p.loadURDF` | Loads `tm_description/urdf/tm5-900.urdf` |
+
+URDF folder download link: https://github.com/TechmanRobotInc/tmr_ros2/tree/humble/tm_description
+
+---
+
+## Parameter Tuning for `safe.areav12.4floor`
+
+| Name | Description |
+| :--- | :--- |
+| `CALIB_ROOT` | Parent directory containing calibration photo folders for pair12 / pair34 |
+| `MODEL_PATH` | Absolute path to the skeleton model weights |
+| `CAM_LINUX_INDEX` | Camera index |
+| `USE_PAIR12/34` | Enable/disable the pair |
+| `BIAS_XY_M` | Skeleton alignment offset for pair12 (apply pair12 first, then pair34) |
+| `APPLY_ALIGN_PAIR_34` | Toggle skeleton alignment offset for pair34 |
+| `AABB_SCALE` | Dynamic emergency stop zone size (unitless) |
+| `SLOW_BOX_HALF_EXTENT_M` | Half-extent (radius) of the fixed blue slow-down zone (m) |
+| `FLOOR_TEXTURE_PATH` | Floor texture path for the 3D physics simulation environment |
+| `T_offset_12/34` | Transform matrix computed by `tcp_to_base3.py` |
+| `self.tm5_id = p.loadURDF` | Loads `tm_description/urdf/tm5-900.urdf` |
+
+URDF folder download link: https://github.com/TechmanRobotInc/tmr_ros2/tree/humble/tm_description
 
 **人機協作安全光柵**
 繞式佈署多台相機，結合多人人體三維姿態追蹤技術，掌握各個關節與機械手臂之間的空間距離與運動關係，持續監測是否有人體骨架進入人機協作區域。
 
-## 📋 目錄結構與檔案說明
+## 目錄結構與檔案說明
 
 | 類別 | 檔案名稱 | 說明 |
 | :--- | :--- | :--- |
@@ -60,7 +167,7 @@ python3 fourcamsafe.areav13.2floor.py
 參數調整依以下表格介紹
 
 
-## 📋 fourcamsafe.areav13.2floor主程式參數調整
+## fourcamsafe.areav13.2floor主程式參數調整
 
 | 名稱 | 說明 |
 | :--- | :--- |
@@ -79,7 +186,7 @@ URDF資料夾下載路徑：https://github.com/TechmanRobotInc/tmr_ros2/tree/hum
 
 
 
-## 📋 safe.areav12.4floor主程式參數調整
+## safe.areav12.4floor主程式參數調整
 
 | 名稱 | 說明 |
 | :--- | :--- |
