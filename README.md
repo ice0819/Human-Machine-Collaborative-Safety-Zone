@@ -24,7 +24,9 @@ Multiple cameras are deployed around the workspace and combined with multi-perso
 If the camera positions or viewing angles change, recalibrate by following the steps below in order.
 
 ### 1. Collect Calibration Photos
-
+```bash
+cd (to the location of the 4capture.p folder)
+```
 ```bash
 python3 4capture.py
 ```
@@ -134,6 +136,9 @@ URDF folder download link: https://github.com/TechmanRobotInc/tmr_ros2/tree/humb
 若相機位置或視角有變動，請依序執行以下步驟重新校正
 
 1. **蒐集校正照片**：
+```bash
+cd (至4capture.p資料夾位置)
+```
 ```bash
 python3 4capture.py
 ```
